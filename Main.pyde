@@ -2,12 +2,12 @@ from math import sin, cos, radians
 from random import randint
 
 width = 1200
-height = 1200    #wielkosc okna
+height = 800   #wielkosc okna
 nr_of_drones = 10
 nr_of_obstacles = 20
-nr_of_moves = 300    #po tylu ruchach tworzone jest nowe pokolenie
+nr_of_moves = 120    #po tylu ruchach tworzone jest nowe pokolenie
 max_move_dist = 20
-mutation_probability = 0.03    #prawdopodobienstwo wystapienia mutacji czyli dodanie nowych ruchow w losowym miejscu listy ruchow
+mutation_probability = 0.1    #prawdopodobienstwo wystapienia mutacji czyli dodanie nowych ruchow w losowym miejscu listy ruchow
 
 
 def setup():
@@ -43,14 +43,20 @@ class Entity(object):
         self.smallest_distance = get_distance(self.pos, goal.pos)
         self.steps_to_closest_position = 0
         self.fitness = 0
+        self.finished = 0
+        self.current_distance = self.smallest_distance
         
     def measure_fitness(self):
-        self.fitness = 1/sqrt(self.smallest_distance+1)/(self.steps_to_closest_position+1)
+        self.fitness = 1/(self.smallest_distance+1)/(self.steps_to_closest_position+1)
+
+    def check_distance(self):
+         if (self.current_distance < self.smallest_distance):
+                self.smallest_distance = self.current_distance
+                self.steps_to_closest_position = moves_made
 
     def update_position(self):
         if (self.currentMove >= len(self.moves)):
             self.currentMove = 0
-        global moves_made
         move = self.moves[self.currentMove]
         self.current_angle = move.angle
         x = self.pos.x + round(move.distance * cos(radians(move.angle)))
@@ -58,23 +64,22 @@ class Entity(object):
         if(x>0 and x < width and y >0 and y < height and check_obstacles(x,y)):
             self.pos.x=x
             self.pos.y=y
-            current_distance = get_distance(self.pos, goal.pos)
-            if (current_distance < self.smallest_distance):
-                self.smallest_distance = current_distance
-                self.steps_to_closest_position = moves_made
+            self.current_distance = get_distance(self.pos, goal.pos)
+            if (self.current_distance < 625):
+                self.finished=1
         self.currentMove+=1
         
-    def show(self):
-        fill(255)
+    def show(self, col, col2=255, col3=255):
+        fill(col, col2, col3)
         noStroke()
         ellipse(self.pos.x, self.pos.y, 10, 10)
 
     def __str__(self):
         retval = "Entity:\n" + \
-                 "Current Angle: " + str(self.current_angle) + "\n" \
+                 "Current Angle: " + str(self.current_angle) + '\n' \
                  "Position: " + str(self.pos) + "\n"
         for move, i in zip(self.moves, range(0, len(self.moves))):
-            retval += "Move " + str(i) + ": " + str(move) + "\n"
+            retval += "Move " + str(i) + ": " + str(move) + '\n'
         return retval
 
     def generate_moves(self, amount, dist):
@@ -113,7 +118,7 @@ class Goal(object):
     def show(self):
         fill(20,250,20)
         stroke(0)
-        ellipse(self.pos.x, self.pos.y, 30, 30)
+        ellipse(self.pos.x, self.pos.y, 50, 50)
         
 def check_obstacles(x,y):
     for obstacle in obstacles:
@@ -125,7 +130,8 @@ def check_obstacles(x,y):
     return 1
 
 def get_distance (a, b):
-    return (a.x - b.x)*(a.x - b.x) + (a.y - b.y)*(a.y - b.y)
+    retval = (a.x - b.x)*(a.x - b.x) + (a.y - b.y)*(a.y - b.y)
+    return retval
 
 def get_random_position():    #zwraca obiekt klasy Position z losowymi wspolrzednymi mieszczacymi sie na ekranie minimum 30 pikseli od krawedzi
     x = randint(30,width-30)
@@ -135,11 +141,18 @@ def get_random_position():    #zwraca obiekt klasy Position z losowymi wspolrzed
 def prepare_drones():
     fitness_sum = 0
     global drones
+    global best_drone
     for drone in drones:
+        if ((drone.finished == 1) and (drone.steps_to_closest_position < best_drone.steps_to_closest_position)):
+            best_drone.moves = drone.moves[:]
+            best_drone.steps_to_closest_position = drone.steps_to_closest_position
         drone.measure_fitness()
         fitness_sum += drone.fitness
+    best_drone.finished=0
     for drone in drones:
         drone.fitness = map(drone.fitness, 0, fitness_sum, 0, 1)
+    best_drone.pos=Position(startpos.x, startpos.y)
+    best_drone.current_move=0
     crossing()
         
 def pick_drone():
@@ -199,18 +212,28 @@ goal = Goal(goalpos)
 drones = [Entity() for i in range (nr_of_drones)]
 for drone in drones:
     drone.generate_moves(nr_of_moves, max_move_dist)
+    
+best_drone = Entity()
+best_drone.steps_to_closest_position=nr_of_moves
 
 def draw():
     background (60)
     global moves_made
+    global best_drone
     for obstacle in obstacles:
         obstacle.show()
     goal.show()
     if (moves_made < nr_of_moves):
         moves_made+=1
         for drone in drones:
-            drone.update_position()
-            drone.show()
+            if (drone.finished == 0):
+                drone.update_position()
+                drone.check_distance()
+            drone.show(255)
+        if (len(best_drone.moves)>0 ):
+            best_drone.show(0,0,200)
+            if (best_drone.finished==0):
+                best_drone.update_position()    
     else:
         prepare_drones()
         global generation
